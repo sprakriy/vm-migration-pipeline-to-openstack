@@ -1,0 +1,51 @@
+name: VMware to OpenStack Migration
+
+on:
+  workflow_dispatch:
+    inputs:
+      vmname:
+        description: 'Name of the VM to migrate'
+        required: true
+        default: 'myvm'
+      vmdk_path:
+        description: 'Path to the VMware VMDK file'
+        required: true
+        default: 'vm-images/myvm.vmdk'
+jobs:
+  migrate-vm:
+    runs-on: ubuntu-latest
+      env:
+      OS_USERNAME: ${{ secrets.OS_USERNAME }}
+      OS_PASSWORD: ${{ secrets.OS_PASSWORD }}
+      OS_PROJECT_NAME: ${{ secrets.OS_PROJECT_NAME }}
+      OS_AUTH_URL: ${{ secrets.OS_AUTH_URL }}
+      OS_DOMAIN_NAME: ${{ secrets.OS_DOMAIN_NAME }}
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y qemu-utils python3-openstackclient
+
+      - name: Convert VMware VMDK to QCOW2
+        run: |
+          chmod +x scripts/convert.sh
+          ./scripts/convert.sh myvm vm-images/myvm.vmdk
+
+      - name: Upload QCOW2 to OpenStack
+        run: |
+          chmod +x scripts/upload.sh
+          ./scripts/upload.sh myvm vm-images/myvm.qcow2
+
+      - name: Install Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.6.0
+
+      - name: Terraform Init & Apply
+        working-directory: terraform
+        run: |
+          terraform init
+          terraform apply -auto-approve
