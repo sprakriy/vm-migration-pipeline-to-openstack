@@ -14,7 +14,7 @@ on:
 jobs:
   migrate-vm:
     runs-on: ubuntu-latest
-      env:
+    env:
       OS_USERNAME: ${{ secrets.OS_USERNAME }}
       OS_PASSWORD: ${{ secrets.OS_PASSWORD }}
       OS_PROJECT_NAME: ${{ secrets.OS_PROJECT_NAME }}
