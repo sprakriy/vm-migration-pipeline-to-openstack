@@ -1,29 +1,42 @@
-# 1. Manage the lifecycle of the local QCOW2 file
 resource "null_resource" "image_lifecycle" {
   triggers = {
+    vm_name   = var.vm_name
     qcow_path = var.qcow_path
   }
 
-  # Convert before creation
   provisioner "local-exec" {
-    command = "qemu-img convert -f vmdk ${var.vmdk_path} -O qcow2 ${var.qcow_path}"
+    command = <<EOT
+      # 1. Convert VMDK to QCOW2
+      qemu-img convert -f vmdk ${var.vmdk_path} -O qcow2 ${var.qcow_path}
+
+      # 2. Inject Drivers and Cloud-Init
+      # This ensures the VM can boot on KVM and accept SSH keys
+      virt-customize -a ${var.qcow_path} \
+        --install cloud-init,qemu-guest-agent \
+        --run-command "systemctl enable cloud-init" \
+        --selinux-relabel
+    EOT
   }
 
-  # Clean up local file after destruction
   provisioner "local-exec" {
     when    = destroy
     command = "rm -f ${self.triggers.qcow_path}"
   }
 }
 
-# 2. Manage the Glance Image in OpenStack
 resource "openstack_images_image_v2" "vm_image" {
   depends_on       = [null_resource.image_lifecycle]
   name             = "${var.vm_name}-image"
   image_source_url = "file://${var.qcow_path}"
   container_format = "bare"
   disk_format      = "qcow2"
-  visibility       = "private"
+  
+  # Added metadata properties for OpenStack to recognize the drivers
+  properties = {
+    hw_disk_bus         = "virtio"
+    hw_vif_model        = "virtio"
+    hw_qemu_guest_agent = "yes"
+  }
 }
 
 # 3. Manage the Compute Instance
