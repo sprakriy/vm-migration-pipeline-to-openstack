@@ -1,51 +1,51 @@
-name: VMware to OpenStack Migration
+name: OpenStack Migration Pipeline
 
 on:
   workflow_dispatch:
     inputs:
       vmname:
-        description: 'Name of the VM to migrate'
+        description: 'Name of the VM'
         required: true
-        default: 'myvm'
-      vmdk_path:
-        description: 'Path to the VMware VMDK file'
+      vmdk_url:
+        description: 'S3 URL to the source .vmdk'
         required: true
-        default: 'vm-images/myvm.vmdk'
+
 jobs:
-  migrate-vm:
+  migrate:
     runs-on: ubuntu-latest
-    env:
-      OS_USERNAME: ${{ secrets.OS_USERNAME }}
-      OS_PASSWORD: ${{ secrets.OS_PASSWORD }}
-      OS_PROJECT_NAME: ${{ secrets.OS_PROJECT_NAME }}
-      OS_AUTH_URL: ${{ secrets.OS_AUTH_URL }}
-      OS_DOMAIN_NAME: ${{ secrets.OS_DOMAIN_NAME }}
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
-      - name: Install dependencies
-        run: |
-          sudo apt update
-          sudo apt install -y qemu-utils python3-openstackclient
-
-      - name: Convert VMware VMDK to QCOW2
-        run: |
-          chmod +x scripts/convert.sh
-          ./scripts/convert.sh "${{ github.event.inputs.vmname }}" "${{ github.event.inputs.vmdk_path }}"
-
-      - name: Upload QCOW2 to OpenStack
-        run: |
-          chmod +x scripts/upload.sh
-          ./scripts/upload.sh "${{ github.event.inputs.vmname }}" "vm-images/${{ github.event.inputs.vmname }}.qcow2
-
-      - name: Install Terraform
-        uses: hashicorp/setup-terraform@v2
+      - name: Configure AWS
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          terraform_version: 1.6.0
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_DEFAULT_REGION }}
+
+      - name: Download VMDK
+        run: |
+          mkdir -p vm-images
+          aws s3 cp ${{ github.event.inputs.vmdk_url }} vm-images/source.vmdk
 
       - name: Terraform Init & Apply
-        working-directory: terraform
         run: |
           terraform init
-          terraform apply -auto-approve
+          terraform apply -auto-approve \
+            -var="vm_name=${{ github.event.inputs.vmname }}" \
+            -var="vmdk_path=vm-images/source.vmdk" \
+            -var="qcow_path=vm-images/converted.qcow2"
+        env:
+          OS_AUTH_URL: ${{ secrets.OS_AUTH_URL }}
+          OS_USERNAME: ${{ secrets.OS_USERNAME }}
+          OS_PASSWORD: ${{ secrets.OS_PASSWORD }}
+          OS_PROJECT_NAME: ${{ secrets.OS_PROJECT_NAME }}
+          OS_DOMAIN_NAME: ${{ secrets.OS_DOMAIN_NAME }}
+
+  # To destroy, you would run a separate job or a manual trigger
+  destroy:
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'destroy'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Terraform Destroy
+        run: terraform destroy -auto-approve

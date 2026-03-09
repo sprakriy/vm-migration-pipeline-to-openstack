@@ -10,3 +10,16 @@ vm-migration-pipeline/
 │   └─ migrate.yml  # GitHub Actions pipeline
 └─ vm-images/
     └─ myvm.vmdk
+
+Changed flow to have everything under terraform control.
+
+├── bootstrap/
+│   └── backend.tf            # Remote state + Locking
+├── modules/
+│   └── openstack-vm/
+│       ├── main.tf           # Conversion, Upload, Instance logic
+│       └── variables.tf      # Inputs for VM and paths
+├── .github/
+│   └── workflows/
+│       └── migrate.yaml      # Pipeline (S3 download -> Terraform Apply)
+└── main.tf                   # Root module caller
