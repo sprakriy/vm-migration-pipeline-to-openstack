@@ -32,12 +32,12 @@ jobs:
       - name: Convert VMware VMDK to QCOW2
         run: |
           chmod +x scripts/convert.sh
-          ./scripts/convert.sh myvm vm-images/myvm.vmdk
+          ./scripts/convert.sh "${{ github.event.inputs.vmname }}" "${{ github.event.inputs.vmdk_path }}"
 
       - name: Upload QCOW2 to OpenStack
         run: |
           chmod +x scripts/upload.sh
-          ./scripts/upload.sh myvm vm-images/myvm.qcow2
+          ./scripts/upload.sh "${{ github.event.inputs.vmname }}" "vm-images/${{ github.event.inputs.vmname }}.qcow2
 
       - name: Install Terraform
         uses: hashicorp/setup-terraform@v2
