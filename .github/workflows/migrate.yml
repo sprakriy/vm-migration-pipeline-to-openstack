@@ -9,7 +9,9 @@ on:
       vmdk_url:
         description: 'S3 URL to the source .vmdk'
         required: true
-
+permissions:
+  id-token: write   # Required for requesting the JWT (OIDC)
+  contents: read    # Required for actions/checkout
 jobs:
   migrate:
     runs-on: ubuntu-latest
